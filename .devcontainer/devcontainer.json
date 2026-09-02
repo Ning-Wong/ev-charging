@@ -1,0 +1,25 @@
+{
+  "name": "ev-charging",
+  "image": "mcr.microsoft.com/devcontainers/base:bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/dotnet:2": { "version": "9.0" },
+    "ghcr.io/devcontainers/features/node:1": { "version": "20" },
+    "ghcr.io/devcontainers/features/azure-cli:1": {}
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "forwardPorts": [7071, 8080],
+  "mounts": [
+    "source=ev-azure-config,target=/home/vscode/.azure,type=volume"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-dotnettools.csdevkit",
+        "ms-azuretools.vscode-azurefunctions",
+        "ms-azuretools.vscode-azureresourcegroups",
+        "vsciot-vscode.azure-iot-toolkit"
+      ]
+    }
+  },
+  "remoteUser": "vscode"
+}
