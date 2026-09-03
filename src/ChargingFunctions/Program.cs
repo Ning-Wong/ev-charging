@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using OpenTelemetry;
 using Azure.Data.Tables;
+using Microsoft.Azure.Devices;
 
 var builder = FunctionsApplication.CreateBuilder(args);
 
@@ -22,6 +23,13 @@ builder.Services.AddSingleton(_ =>
     var client = new TableClient(conn, tableName);
     client.CreateIfNotExists();
     return client;
+});
+
+builder.Services.AddSingleton(_ =>
+{
+    var conn = Environment.GetEnvironmentVariable("IoTHubServiceConnectionString")
+        ?? throw new InvalidOperationException("IoTHubServiceConnectionString is not set");
+    return ServiceClient.CreateFromConnectionString(conn);
 });
 
 builder.Build().Run();

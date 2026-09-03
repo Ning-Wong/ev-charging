@@ -10,17 +10,18 @@ var connectionString =
 using var client = DeviceClient.CreateFromConnectionString(
     connectionString, TransportType.Mqtt);
 
-var interval = TimeSpan.FromSeconds(15);
-Console.WriteLine(
-    $"Simulator started. Sending telemetry every {interval.TotalSeconds}s. Press Ctrl+C to stop.");
+var isCharging = false;
+var batteryLevel = 50;
 
-while (true)
+using var stateChanged = new SemaphoreSlim(0);
+
+async Task SendTelemetryAsync()
 {
     var telemetry = new
     {
         deviceId = "my-car",
-        batteryLevel = 50,
-        isCharging = false,
+        batteryLevel,
+        isCharging,
         timestamp = DateTimeOffset.UtcNow
     };
 
@@ -34,6 +35,33 @@ while (true)
 
     await client.SendEventAsync(message);
     Console.WriteLine($"Sent: {payload}");
+}
 
-    await Task.Delay(interval);
+await client.SetMethodHandlerAsync("startCharging", (request, _) =>
+{
+    isCharging = true;
+    Console.WriteLine("Direct method: startCharging");
+    stateChanged.Release();
+    return Task.FromResult(new MethodResponse(
+        Encoding.UTF8.GetBytes("""{"status":"charging started"}"""), 200));
+}, null);
+
+await client.SetMethodHandlerAsync("stopCharging", (request, _) =>
+{
+    isCharging = false;
+    Console.WriteLine("Direct method: stopCharging");
+    stateChanged.Release();
+    return Task.FromResult(new MethodResponse(
+        Encoding.UTF8.GetBytes("""{"status":"charging stopped"}"""), 200));
+}, null);
+
+var interval = TimeSpan.FromSeconds(15);
+Console.WriteLine(
+    $"Simulator started. Sending telemetry every {interval.TotalSeconds}s. Press Ctrl+C to stop.");
+
+while (true)
+{
+    await SendTelemetryAsync();
+
+    await stateChanged.WaitAsync(interval);
 }

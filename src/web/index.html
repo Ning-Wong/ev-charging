@@ -17,6 +17,22 @@
     .status { color: #666; font-size: 0.9rem; }
     .error { color: #c0392b; }
     .updated { color: #999; font-size: 0.8rem; margin-top: 2rem; }
+    .actions { margin-top: 1.5rem; display: flex; gap: 0.5rem; }
+    button {
+      font: inherit;
+      padding: 0.5rem 1rem;
+      cursor: pointer;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      background: #fff;
+    }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .feedback {
+      margin-top: 0.75rem;
+      font-size: 0.85rem;
+      color: #666;
+      min-height: 1.2em;
+    }
   </style>
 </head>
 <body>
@@ -25,14 +41,33 @@
   <div class="status" id="status">Connecting...</div>
   <div class="updated" id="updated"></div>
 
+  <div class="actions">
+    <button id="start">Start charging</button>
+    <button id="stop">Stop charging</button>
+  </div>
+  <div class="feedback" id="feedback"></div>
+
   <script>
     const API = "http://localhost:7071/api";
     const DEVICE_ID = "my-car";
     const POLL_INTERVAL_MS = 5000;
+    const CONFIRM_TIMEOUT_MS = 30000;
 
     const levelEl = document.getElementById("level");
     const statusEl = document.getElementById("status");
     const updatedEl = document.getElementById("updated");
+    const startBtn = document.getElementById("start");
+    const stopBtn = document.getElementById("stop");
+    const feedbackEl = document.getElementById("feedback");
+
+    // What we are waiting for the car to confirm, or null when nothing is pending
+    let pendingCharging = null;
+    let pendingSince = 0;
+
+    function clearPending(message = "") {
+      pendingCharging = null;
+      feedbackEl.textContent = message;
+    }
 
     async function refresh() {
       try {
@@ -41,7 +76,6 @@
 
         const data = await res.json();
 
-        // Fail loudly on an unexpected payload instead of rendering "undefined"
         if (typeof data.batteryLevel !== "number" ||
             typeof data.isCharging !== "boolean") {
           throw new Error(`Unexpected payload: ${JSON.stringify(data)}`);
@@ -52,11 +86,52 @@
         statusEl.className = "status";
         updatedEl.textContent =
           `Last updated ${new Date(data.lastUpdated).toLocaleTimeString()}`;
+
+        if (pendingCharging !== null) {
+          if (data.isCharging === pendingCharging) {
+            clearPending();
+          } else if (Date.now() - pendingSince > CONFIRM_TIMEOUT_MS) {
+            clearPending("Command sent, but the car has not reported the new state.");
+          }
+        }
       } catch (err) {
         statusEl.textContent = `Error: ${err.message}`;
         statusEl.className = "status error";
       }
     }
+
+    async function sendCommand(action) {
+      startBtn.disabled = true;
+      stopBtn.disabled = true;
+      feedbackEl.textContent = "Sending...";
+
+      try {
+        const res = await fetch(`${API}/cars/${DEVICE_ID}/charging/${action}`, {
+          method: "POST"
+        });
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+        if (data.accepted) {
+          pendingCharging = (action === "start");
+          pendingSince = Date.now();
+          feedbackEl.textContent = "Car acknowledged. Updating...";
+          // Can be optimized based on expected response time
+          setTimeout(refresh, 200);
+        } else {
+          clearPending(`Car rejected the command (status ${data.deviceStatus})`);
+        }
+      } catch (err) {
+        clearPending(`Failed: ${err.message}`);
+      } finally {
+        startBtn.disabled = false;
+        stopBtn.disabled = false;
+      }
+    }
+
+    startBtn.addEventListener("click", () => sendCommand("start"));
+    stopBtn.addEventListener("click", () => sendCommand("stop"));
 
     refresh();
     setInterval(refresh, POLL_INTERVAL_MS);
