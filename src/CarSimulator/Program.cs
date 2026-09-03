@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using System.Text.Json;
 using Microsoft.Azure.Devices.Client;
 
 var connectionString =
@@ -9,8 +10,30 @@ var connectionString =
 using var client = DeviceClient.CreateFromConnectionString(
     connectionString, TransportType.Mqtt);
 
-var payload = """{"hello":"world"}""";
-using var message = new Message(Encoding.UTF8.GetBytes(payload));
+var interval = TimeSpan.FromSeconds(15);
+Console.WriteLine(
+    $"Simulator started. Sending telemetry every {interval.TotalSeconds}s. Press Ctrl+C to stop.");
 
-await client.SendEventAsync(message);
-Console.WriteLine($"Sent: {payload}");
+while (true)
+{
+    var telemetry = new
+    {
+        deviceId = "my-car",
+        batteryLevel = 50,
+        isCharging = false,
+        timestamp = DateTimeOffset.UtcNow
+    };
+
+    var payload = JsonSerializer.Serialize(telemetry);
+
+    using var message = new Message(Encoding.UTF8.GetBytes(payload))
+    {
+        ContentType = "application/json",
+        ContentEncoding = "utf-8"
+    };
+
+    await client.SendEventAsync(message);
+    Console.WriteLine($"Sent: {payload}");
+
+    await Task.Delay(interval);
+}

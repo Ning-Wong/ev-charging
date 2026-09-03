@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My Car</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 480px;
+      margin: 4rem auto;
+      padding: 0 1rem;
+      color: #1a1a1a;
+    }
+    h1 { font-size: 1.25rem; font-weight: 600; }
+    .level { font-size: 3.5rem; font-weight: 600; margin: 1rem 0 0.25rem; }
+    .status { color: #666; font-size: 0.9rem; }
+    .error { color: #c0392b; }
+    .updated { color: #999; font-size: 0.8rem; margin-top: 2rem; }
+  </style>
+</head>
+<body>
+  <h1>my-car</h1>
+  <div class="level" id="level">--</div>
+  <div class="status" id="status">Connecting...</div>
+  <div class="updated" id="updated"></div>
+
+  <script>
+    const API = "http://localhost:7071/api";
+    const DEVICE_ID = "my-car";
+    const POLL_INTERVAL_MS = 5000;
+
+    const levelEl = document.getElementById("level");
+    const statusEl = document.getElementById("status");
+    const updatedEl = document.getElementById("updated");
+
+    async function refresh() {
+      try {
+        const res = await fetch(`${API}/cars/${DEVICE_ID}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const data = await res.json();
+
+        // Fail loudly on an unexpected payload instead of rendering "undefined"
+        if (typeof data.batteryLevel !== "number" ||
+            typeof data.isCharging !== "boolean") {
+          throw new Error(`Unexpected payload: ${JSON.stringify(data)}`);
+        }
+
+        levelEl.textContent = `${data.batteryLevel}%`;
+        statusEl.textContent = data.isCharging ? "Charging" : "Not charging";
+        statusEl.className = "status";
+        updatedEl.textContent =
+          `Last updated ${new Date(data.lastUpdated).toLocaleTimeString()}`;
+      } catch (err) {
+        statusEl.textContent = `Error: ${err.message}`;
+        statusEl.className = "status error";
+      }
+    }
+
+    refresh();
+    setInterval(refresh, POLL_INTERVAL_MS);
+  </script>
+</body>
+</html>
