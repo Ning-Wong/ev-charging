@@ -3,6 +3,7 @@ using Azure;
 using Azure.Data.Tables;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
+using Azure.Messaging.EventHubs;
 
 namespace ChargingFunctions;
 
@@ -42,17 +43,28 @@ public class TelemetryProcessor
             "messages/events",
             Connection = "IoTHubEventEndpoint",
             ConsumerGroup = "functions")]
-        string[] messages)
+        EventData[] events)
     {
-        foreach (var raw in messages)
+        foreach (var e in events)
         {
+            var raw = e.EventBody.ToString();
             _log.LogInformation("Received: {Raw}", raw);
+
+            // Device identity comes from IoT Hub, not from the payload.
+            if (!e.SystemProperties.TryGetValue(
+                    "iothub-connection-device-id", out var deviceIdObj)
+                || deviceIdObj is not string deviceId
+                || string.IsNullOrWhiteSpace(deviceId))
+            {
+                _log.LogWarning("Message without a device id, skipping");
+                continue;
+            }
 
             var telemetry = JsonSerializer.Deserialize<CarTelemetry>(
                 raw,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
-            if (telemetry is null || string.IsNullOrWhiteSpace(telemetry.DeviceId))
+            if (telemetry is null || string.IsNullOrWhiteSpace(deviceId))
             {
                 _log.LogWarning("Could not parse message, skipping");
                 continue;
@@ -60,7 +72,7 @@ public class TelemetryProcessor
 
             await _table.UpsertEntityAsync(new CarStateEntity
             {
-                RowKey = telemetry.DeviceId,
+                RowKey = deviceId,
                 BatteryLevel = telemetry.BatteryLevel,
                 IsCharging = telemetry.IsCharging,
                 LastUpdated = telemetry.Timestamp

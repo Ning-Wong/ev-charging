@@ -13,8 +13,25 @@
       color: #1a1a1a;
     }
     h1 { font-size: 1.25rem; font-weight: 600; }
-    .level { font-size: 3.5rem; font-weight: 600; margin: 1rem 0 0.25rem; }
+    .level { font-size: 3.5rem; font-weight: 600; margin: 1rem 0 0.5rem; }
+    .bar {
+      height: 12px;
+      background: #eee;
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 0.75rem;
+    }
+    .bar-fill {
+      height: 100%;
+      width: 0%;
+      background: #4a9d5f;
+      border-radius: 6px;
+      transition: width 0.6s ease, background-color 0.3s ease;
+    }
+    .bar-fill.low { background: #c0392b; }
+    .bar-fill.charging { background: #2d7dd2; }
     .status { color: #666; font-size: 0.9rem; }
+    .status.charging { color: #2d7dd2; font-weight: 600; }
     .error { color: #c0392b; }
     .updated { color: #999; font-size: 0.8rem; margin-top: 2rem; }
     .actions { margin-top: 1.5rem; display: flex; gap: 0.5rem; }
@@ -38,6 +55,7 @@
 <body>
   <h1>my-car</h1>
   <div class="level" id="level">--</div>
+  <div class="bar"><div class="bar-fill" id="barFill"></div></div>
   <div class="status" id="status">Connecting...</div>
   <div class="updated" id="updated"></div>
 
@@ -52,8 +70,10 @@
     const DEVICE_ID = "my-car";
     const POLL_INTERVAL_MS = 5000;
     const CONFIRM_TIMEOUT_MS = 30000;
+    const LOW_BATTERY_THRESHOLD = 20;
 
     const levelEl = document.getElementById("level");
+    const barFillEl = document.getElementById("barFill");
     const statusEl = document.getElementById("status");
     const updatedEl = document.getElementById("updated");
     const startBtn = document.getElementById("start");
@@ -69,6 +89,27 @@
       feedbackEl.textContent = message;
     }
 
+    function render(data) {
+      levelEl.textContent = `${data.batteryLevel}%`;
+
+      barFillEl.style.width = `${data.batteryLevel}%`;
+      barFillEl.className = "bar-fill";
+      if (data.isCharging) {
+        barFillEl.classList.add("charging");
+      } else if (data.batteryLevel <= LOW_BATTERY_THRESHOLD) {
+        barFillEl.classList.add("low");
+      }
+
+      statusEl.textContent = data.isCharging ? "Charging" : "Not charging";
+      statusEl.className = data.isCharging ? "status charging" : "status";
+
+      updatedEl.textContent =
+        `Last updated ${new Date(data.lastUpdated).toLocaleTimeString()}`;
+
+      // Full battery cannot start charging, so grey the button out
+      startBtn.disabled = data.batteryLevel >= 100;
+    }
+
     async function refresh() {
       try {
         const res = await fetch(`${API}/cars/${DEVICE_ID}`);
@@ -76,17 +117,15 @@
 
         const data = await res.json();
 
+        // Fail loudly on an unexpected payload instead of rendering "undefined"
         if (typeof data.batteryLevel !== "number" ||
             typeof data.isCharging !== "boolean") {
           throw new Error(`Unexpected payload: ${JSON.stringify(data)}`);
         }
 
-        levelEl.textContent = `${data.batteryLevel}%`;
-        statusEl.textContent = data.isCharging ? "Charging" : "Not charging";
-        statusEl.className = "status";
-        updatedEl.textContent =
-          `Last updated ${new Date(data.lastUpdated).toLocaleTimeString()}`;
+        render(data);
 
+        // Drop the pending notice once the car reports the state we asked for
         if (pendingCharging !== null) {
           if (data.isCharging === pendingCharging) {
             clearPending();
@@ -117,16 +156,16 @@
           pendingCharging = (action === "start");
           pendingSince = Date.now();
           feedbackEl.textContent = "Car acknowledged. Updating...";
-          // Can be optimized based on expected response time
-          setTimeout(refresh, 200);
+          setTimeout(refresh, 1500);
         } else {
           clearPending(`Car rejected the command (status ${data.deviceStatus})`);
         }
       } catch (err) {
         clearPending(`Failed: ${err.message}`);
       } finally {
-        startBtn.disabled = false;
         stopBtn.disabled = false;
+        // startBtn is re-enabled by render() based on the actual battery level
+        refresh();
       }
     }
 
