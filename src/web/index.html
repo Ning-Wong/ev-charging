@@ -50,6 +50,37 @@
       color: #666;
       min-height: 1.2em;
     }
+    .schedule {
+      margin-top: 2.5rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid #eee;
+    }
+    .schedule-label {
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin-bottom: 0.6rem;
+    }
+    .schedule-row {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    input[type="time"], select {
+      font: inherit;
+      padding: 0.45rem 0.6rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      background: #fff;
+    }
+    .schedule-status {
+      margin-top: 0.6rem;
+      font-size: 0.85rem;
+      color: #666;
+      min-height: 1.2em;
+    }
+    .schedule-status.pending { color: #b8860b; }
+    .schedule-status.confirmed { color: #4a9d5f; }
   </style>
 </head>
 <body>
@@ -65,12 +96,27 @@
   </div>
   <div class="feedback" id="feedback"></div>
 
+  <div class="schedule">
+    <div class="schedule-label">Charging schedule</div>
+    <div class="schedule-row">
+      <input type="time" id="scheduleTime">
+      <select id="scheduleRepeat">
+        <option value="repeat">Every day</option>
+        <option value="once">Once only</option>
+      </select>
+      <button id="saveSchedule">Save</button>
+      <button id="clearSchedule">Clear</button>
+    </div>
+    <div class="schedule-status" id="scheduleStatus">Loading...</div>
+  </div>
+
   <script>
     const API = "http://localhost:7071/api";
     const DEVICE_ID = "my-car";
     const POLL_INTERVAL_MS = 5000;
     const CONFIRM_TIMEOUT_MS = 30000;
     const LOW_BATTERY_THRESHOLD = 20;
+    const TIME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
     const levelEl = document.getElementById("level");
     const barFillEl = document.getElementById("barFill");
@@ -80,9 +126,26 @@
     const stopBtn = document.getElementById("stop");
     const feedbackEl = document.getElementById("feedback");
 
-    // What we are waiting for the car to confirm, or null when nothing is pending
+    const scheduleTimeEl = document.getElementById("scheduleTime");
+    const scheduleRepeatEl = document.getElementById("scheduleRepeat");
+    const saveScheduleBtn = document.getElementById("saveSchedule");
+    const clearScheduleBtn = document.getElementById("clearSchedule");
+    const scheduleStatusEl = document.getElementById("scheduleStatus");
+
     let pendingCharging = null;
     let pendingSince = 0;
+
+    let scheduleDirty = false;
+
+    async function readJsonSafely(res) {
+      const text = await res.text();
+      if (!text) return null;
+      try {
+        return JSON.parse(text);
+      } catch {
+        return { error: text.slice(0, 200) };
+      }
+    }
 
     function clearPending(message = "") {
       pendingCharging = null;
@@ -106,20 +169,17 @@
       updatedEl.textContent =
         `Last updated ${new Date(data.lastUpdated).toLocaleTimeString()}`;
 
-      // Full battery cannot start charging, so grey the button out
       startBtn.disabled = data.batteryLevel >= 100;
     }
 
     async function refresh() {
       try {
         const res = await fetch(`${API}/cars/${DEVICE_ID}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await readJsonSafely(res);
+        if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
 
-        const data = await res.json();
-
-        // Fail loudly on an unexpected payload instead of rendering "undefined"
-        if (typeof data.batteryLevel !== "number" ||
-            typeof data.isCharging !== "boolean") {
+        if (typeof data?.batteryLevel !== "number" ||
+            typeof data?.isCharging !== "boolean") {
           throw new Error(`Unexpected payload: ${JSON.stringify(data)}`);
         }
 
@@ -148,32 +208,132 @@
         const res = await fetch(`${API}/cars/${DEVICE_ID}/charging/${action}`, {
           method: "POST"
         });
-        const data = await res.json();
+        const data = await readJsonSafely(res);
+        if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
 
-        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-
-        if (data.accepted) {
+        if (data?.accepted) {
           pendingCharging = (action === "start");
           pendingSince = Date.now();
           feedbackEl.textContent = "Car acknowledged. Updating...";
-          setTimeout(refresh, 1500);
+          // Can be optimized based on expected response time
+          setTimeout(refresh, 200);
         } else {
-          clearPending(`Car rejected the command (status ${data.deviceStatus})`);
+          clearPending(`Car rejected the command (status ${data?.deviceStatus})`);
         }
       } catch (err) {
         clearPending(`Failed: ${err.message}`);
       } finally {
         stopBtn.disabled = false;
-        // startBtn is re-enabled by render() based on the actual battery level
         refresh();
       }
     }
+
+    function describeSchedule(data) {
+      // runsLeftOnCar is the countdown the car is actually working from
+      const runs = data.runsLeftOnCar ?? data.remainingRuns;
+
+      if (runs === null || runs === undefined) {
+        return `charges daily at ${data.startTime}`;
+      }
+      if (runs <= 0) {
+        return "schedule finished";
+      }
+      if (runs === 1) {
+        return `charges once at ${data.startTime}`;
+      }
+      return `charges at ${data.startTime}, ${runs} runs left`;
+    }
+
+    function renderSchedule(data) {
+      if (!scheduleDirty) {
+        scheduleTimeEl.value = data.startTime ?? "";
+        scheduleRepeatEl.value =
+          data.remainingRuns === null || data.remainingRuns === undefined
+            ? "repeat"
+            : "once";
+      }
+
+      if (!data.startTime) {
+        scheduleStatusEl.textContent = "No schedule set";
+        scheduleStatusEl.className = "schedule-status";
+      } else if (data.acknowledgedByCar) {
+        scheduleStatusEl.textContent = `Car confirmed: ${describeSchedule(data)}`;
+        scheduleStatusEl.className = "schedule-status confirmed";
+      } else {
+        scheduleStatusEl.textContent = "Saved. Waiting for the car to confirm...";
+        scheduleStatusEl.className = "schedule-status pending";
+      }
+    }
+
+    async function loadSchedule() {
+      try {
+        const res = await fetch(`${API}/cars/${DEVICE_ID}/schedule`);
+        const data = await readJsonSafely(res);
+        if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+        renderSchedule(data ?? {});
+      } catch (err) {
+        scheduleStatusEl.textContent = `Error: ${err.message}`;
+        scheduleStatusEl.className = "schedule-status";
+      }
+    }
+
+    async function saveSchedule(clear) {
+      saveScheduleBtn.disabled = true;
+      clearScheduleBtn.disabled = true;
+      scheduleStatusEl.textContent = "Saving...";
+      scheduleStatusEl.className = "schedule-status";
+
+      const body = clear
+        ? {}
+        : {
+            startTime: scheduleTimeEl.value,
+            timeZone: TIME_ZONE,
+            // null means repeat forever
+            remainingRuns: scheduleRepeatEl.value === "once" ? 1 : null
+          };
+
+      try {
+        const res = await fetch(`${API}/cars/${DEVICE_ID}/schedule`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        const data = await readJsonSafely(res);
+        if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+
+        // Hand control of the inputs back to polling
+        scheduleDirty = false;
+        renderSchedule(data ?? {});
+        setTimeout(loadSchedule, 200);
+      } catch (err) {
+        scheduleStatusEl.textContent = `Failed: ${err.message}`;
+        scheduleStatusEl.className = "schedule-status";
+      } finally {
+        saveScheduleBtn.disabled = false;
+        clearScheduleBtn.disabled = false;
+      }
+    }
+
+    scheduleTimeEl.addEventListener("input", () => { scheduleDirty = true; });
+    scheduleRepeatEl.addEventListener("change", () => { scheduleDirty = true; });
+
+    saveScheduleBtn.addEventListener("click", () => {
+      if (!scheduleTimeEl.value) {
+        scheduleStatusEl.textContent = "Pick a time first";
+        return;
+      }
+      saveSchedule(false);
+    });
+
+    clearScheduleBtn.addEventListener("click", () => saveSchedule(true));
 
     startBtn.addEventListener("click", () => sendCommand("start"));
     stopBtn.addEventListener("click", () => sendCommand("stop"));
 
     refresh();
+    loadSchedule();
     setInterval(refresh, POLL_INTERVAL_MS);
+    setInterval(loadSchedule, POLL_INTERVAL_MS);
   </script>
 </body>
 </html>

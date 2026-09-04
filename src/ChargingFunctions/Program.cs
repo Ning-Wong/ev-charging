@@ -32,4 +32,11 @@ builder.Services.AddSingleton(_ =>
     return ServiceClient.CreateFromConnectionString(conn);
 });
 
+builder.Services.AddSingleton(_ =>
+{
+    var conn = Environment.GetEnvironmentVariable("IoTHubServiceConnectionString")
+        ?? throw new InvalidOperationException("IoTHubServiceConnectionString is not set");
+    return RegistryManager.CreateFromConnectionString(conn);
+});
+
 builder.Build().Run();
