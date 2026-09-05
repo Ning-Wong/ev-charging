@@ -1,5 +1,6 @@
 ﻿using System.Text;
 using System.Text.Json;
+using CarSimulator;
 using Microsoft.Azure.Devices.Client;
 using Microsoft.Azure.Devices.Shared;
 
@@ -11,14 +12,13 @@ var connectionString =
 using var client = DeviceClient.CreateFromConnectionString(
     connectionString, TransportType.Mqtt);
 
-// --- Battery simulation parameters ---
 var interval = TimeSpan.FromSeconds(15);
-const double ChargeRatePerMinute = 50.0;
-const double DrainRatePerMinute = 30.0;
 
-var batteryLevel = 50.0;
-var isCharging = false;
-var lastTick = DateTimeOffset.UtcNow;
+var battery = new BatterySimulator(
+    initialLevel: 50.0,
+    now: DateTimeOffset.UtcNow,
+    chargeRatePerMinute: 50.0,
+    drainRatePerMinute: 30.0);
 
 string? scheduleTime = null;          // "02:00"
 string? scheduleZone = null;          // "Pacific/Auckland"
@@ -29,70 +29,11 @@ bool? lastReportedCharging = null;
 
 using var stateChanged = new SemaphoreSlim(0);
 
-void AdvanceBattery()
+void LogNextRun()
 {
-    var now = DateTimeOffset.UtcNow;
-    var minutes = (now - lastTick).TotalMinutes;
-    lastTick = now;
-
-    batteryLevel += isCharging
-        ? ChargeRatePerMinute * minutes
-        : -DrainRatePerMinute * minutes;
-
-    batteryLevel = Math.Clamp(batteryLevel, 0.0, 100.0);
-
-    if (isCharging && batteryLevel >= 100.0)
-    {
-        isCharging = false;
-        Console.WriteLine("Battery full, charging stopped automatically");
-    }
-}
-
-DateTimeOffset? ComputeNextRun(string? time, string? zone, int? runsLeft)
-{
-    if (string.IsNullOrWhiteSpace(time) || string.IsNullOrWhiteSpace(zone))
-        return null;
-
-    if (runsLeft is <= 0)
-        return null;
-
-    if (!TimeSpan.TryParse(time, out var timeOfDay))
-    {
-        Console.WriteLine($"Invalid schedule time '{time}', ignoring");
-        return null;
-    }
-
-    TimeZoneInfo tz;
-    try
-    {
-        tz = TimeZoneInfo.FindSystemTimeZoneById(zone);
-    }
-    catch (TimeZoneNotFoundException)
-    {
-        Console.WriteLine($"Unknown time zone '{zone}', ignoring schedule");
-        return null;
-    }
-
-    var localNow = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, tz).DateTime;
-
-    for (var dayOffset = 0; dayOffset <= 2; dayOffset++)
-    {
-        var candidate = localNow.Date.AddDays(dayOffset) + timeOfDay;
-        if (candidate <= localNow) continue;
-
-        var unspecified = DateTime.SpecifyKind(candidate, DateTimeKind.Unspecified);
-
-        if (tz.IsInvalidTime(unspecified))
-        {
-            Console.WriteLine(
-                $"{candidate:yyyy-MM-dd HH:mm} does not exist in {zone} (clocks jump forward), trying the next day");
-            continue;
-        }
-
-        return new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(unspecified, tz), TimeSpan.Zero);
-    }
-
-    return null;
+    Console.WriteLine(nextScheduledRun is null
+        ? "No further scheduled runs"
+        : $"Next scheduled run at {nextScheduledRun:u}");
 }
 
 async Task ReportStateAsync()
@@ -108,20 +49,20 @@ async Task ReportStateAsync()
 
     var json = JsonSerializer.Serialize(new
     {
-        isCharging,
-        batteryLevel = (int)Math.Round(batteryLevel),
+        isCharging = battery.IsCharging,
+        batteryLevel = battery.Level,
         chargingSchedule = schedulePayload
     });
 
     await client.UpdateReportedPropertiesAsync(new TwinCollection(json));
-    lastReportedCharging = isCharging;
+    lastReportedCharging = battery.IsCharging;
 }
 
 async Task ApplyDesiredAsync(TwinCollection desired)
 {
     if (!desired.Contains("chargingSchedule")) return;
 
-    var raw = desired["chargingSchedule"]?.ToString();
+    string? raw = desired["chargingSchedule"]?.ToString();
 
     if (string.IsNullOrWhiteSpace(raw) || raw == "null")
     {
@@ -134,7 +75,7 @@ async Task ApplyDesiredAsync(TwinCollection desired)
     else
     {
         using var doc = JsonDocument.Parse(raw);
-        var root = doc.RootElement;
+        JsonElement root = doc.RootElement;
 
         scheduleTime = root.TryGetProperty("startTime", out JsonElement t) ? t.GetString() : null;
         scheduleZone = root.TryGetProperty("timeZone", out JsonElement z) ? z.GetString() : null;
@@ -144,12 +85,13 @@ async Task ApplyDesiredAsync(TwinCollection desired)
             ? r.GetInt32()
             : null;
 
-        nextScheduledRun = ComputeNextRun(scheduleTime, scheduleZone, remainingRuns);
+        nextScheduledRun = ScheduleCalculator.ComputeNextRun(
+            scheduleTime, scheduleZone, remainingRuns, DateTimeOffset.UtcNow);
 
         var runsLabel = remainingRuns?.ToString() ?? "unlimited";
-        Console.WriteLine(nextScheduledRun is null
-            ? $"Charging schedule {scheduleTime} ({scheduleZone}) could not be resolved"
-            : $"Charging schedule set to {scheduleTime} ({scheduleZone}), runs={runsLabel}, next run at {nextScheduledRun:u}");
+        Console.WriteLine(
+            $"Charging schedule set to {scheduleTime} ({scheduleZone}), runs={runsLabel}");
+        LogNextRun();
     }
 
     await ReportStateAsync();
@@ -160,8 +102,8 @@ async Task SendTelemetryAsync()
     var telemetry = new
     {
         deviceId = "my-car",
-        batteryLevel = (int)Math.Round(batteryLevel),
-        isCharging,
+        batteryLevel = battery.Level,
+        isCharging = battery.IsCharging,
         timestamp = DateTimeOffset.UtcNow
     };
 
@@ -179,16 +121,13 @@ async Task SendTelemetryAsync()
 
 await client.SetMethodHandlerAsync("startCharging", (request, _) =>
 {
-    AdvanceBattery();
-
-    if (batteryLevel >= 100.0)
+    if (!battery.TryStartCharging(DateTimeOffset.UtcNow))
     {
         Console.WriteLine("Direct method: startCharging rejected, battery already full");
         return Task.FromResult(new MethodResponse(
             Encoding.UTF8.GetBytes("""{"status":"battery already full"}"""), 409));
     }
 
-    isCharging = true;
     Console.WriteLine("Direct method: startCharging");
     stateChanged.Release();
     return Task.FromResult(new MethodResponse(
@@ -197,8 +136,7 @@ await client.SetMethodHandlerAsync("startCharging", (request, _) =>
 
 await client.SetMethodHandlerAsync("stopCharging", (request, _) =>
 {
-    AdvanceBattery();
-    isCharging = false;
+    battery.StopCharging(DateTimeOffset.UtcNow);
     Console.WriteLine("Direct method: stopCharging");
     stateChanged.Release();
     return Task.FromResult(new MethodResponse(
@@ -207,26 +145,33 @@ await client.SetMethodHandlerAsync("stopCharging", (request, _) =>
 
 var twin = await client.GetTwinAsync();
 
+var restoredLevel = 50.0;
+var restoredCharging = false;
+
 if (twin.Properties.Reported.Contains("isCharging"))
 {
-    isCharging = (bool)twin.Properties.Reported["isCharging"];
-    Console.WriteLine($"Restored charging state from twin: {isCharging}");
+    restoredCharging = (bool)twin.Properties.Reported["isCharging"];
+    Console.WriteLine($"Restored charging state from twin: {restoredCharging}");
 }
 
 if (twin.Properties.Reported.Contains("batteryLevel"))
 {
-    batteryLevel = (int)twin.Properties.Reported["batteryLevel"];
-    Console.WriteLine($"Restored battery level from twin: {batteryLevel}%");
+    restoredLevel = (int)twin.Properties.Reported["batteryLevel"];
+    Console.WriteLine($"Restored battery level from twin: {restoredLevel}%");
 }
+
+battery.Restore(restoredLevel, restoredCharging, DateTimeOffset.UtcNow);
 
 var restoredRuns = (int?)null;
 if (twin.Properties.Reported.Contains("chargingSchedule"))
 {
-    var reportedRaw = twin.Properties.Reported["chargingSchedule"]?.ToString();
+    string? reportedRaw = twin.Properties.Reported["chargingSchedule"]?.ToString();
     if (!string.IsNullOrWhiteSpace(reportedRaw) && reportedRaw != "null")
     {
         using var doc = JsonDocument.Parse(reportedRaw);
-        if (doc.RootElement.TryGetProperty("remainingRuns", out JsonElement r)
+        JsonElement reportedRoot = doc.RootElement;
+
+        if (reportedRoot.TryGetProperty("remainingRuns", out JsonElement r)
             && r.ValueKind == JsonValueKind.Number)
         {
             restoredRuns = r.GetInt32();
@@ -234,15 +179,16 @@ if (twin.Properties.Reported.Contains("chargingSchedule"))
     }
 }
 
-lastTick = DateTimeOffset.UtcNow;
-
 await ApplyDesiredAsync(twin.Properties.Desired);
 
 if (restoredRuns is { } runs && remainingRuns is not null && runs < remainingRuns)
 {
     remainingRuns = runs;
-    nextScheduledRun = ComputeNextRun(scheduleTime, scheduleZone, remainingRuns);
+    nextScheduledRun = ScheduleCalculator.ComputeNextRun(
+        scheduleTime, scheduleZone, remainingRuns, DateTimeOffset.UtcNow);
+
     Console.WriteLine($"Restored countdown from twin: {runs} run(s) left");
+    LogNextRun();
     await ReportStateAsync();
 }
 
@@ -254,18 +200,20 @@ Console.WriteLine(
 
 while (true)
 {
-    AdvanceBattery();
+    if (battery.Advance(DateTimeOffset.UtcNow))
+    {
+        Console.WriteLine("Battery full, charging stopped automatically");
+    }
 
     if (nextScheduledRun is { } due && DateTimeOffset.UtcNow >= due)
     {
-        if (!isCharging && batteryLevel < 100.0)
+        if (battery.TryStartCharging(DateTimeOffset.UtcNow))
         {
-            isCharging = true;
             Console.WriteLine($"Scheduled charging started ({scheduleTime} {scheduleZone})");
         }
         else
         {
-            Console.WriteLine("Scheduled time reached, but charging was not needed");
+            Console.WriteLine("Scheduled time reached, but the battery is already full");
         }
 
         if (remainingRuns is { } left)
@@ -274,17 +222,16 @@ while (true)
             Console.WriteLine($"Runs left: {remainingRuns}");
         }
 
-        nextScheduledRun = ComputeNextRun(scheduleTime, scheduleZone, remainingRuns);
-        Console.WriteLine(nextScheduledRun is null
-            ? "Schedule finished, no further runs"
-            : $"Next scheduled run at {nextScheduledRun:u}");
+        nextScheduledRun = ScheduleCalculator.ComputeNextRun(
+            scheduleTime, scheduleZone, remainingRuns, DateTimeOffset.UtcNow);
 
+        LogNextRun();
         await ReportStateAsync();
     }
 
     await SendTelemetryAsync();
 
-    if (lastReportedCharging != isCharging)
+    if (lastReportedCharging != battery.IsCharging)
     {
         await ReportStateAsync();
     }
