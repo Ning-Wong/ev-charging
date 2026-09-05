@@ -111,7 +111,9 @@
   </div>
 
   <script>
-    const API = "http://localhost:7071/api";
+    const API = location.hostname === "localhost" || location.hostname === "127.0.0.1"
+      ? "http://localhost:7071/api"
+      : "https://ev-charging-fn.azurewebsites.net/api";
     const DEVICE_ID = "my-car";
     const POLL_INTERVAL_MS = 5000;
     const CONFIRM_TIMEOUT_MS = 30000;
@@ -216,7 +218,7 @@
           pendingSince = Date.now();
           feedbackEl.textContent = "Car acknowledged. Updating...";
           // Can be optimized based on expected response time
-          setTimeout(refresh, 200);
+          setTimeout(refresh, 500);
         } else {
           clearPending(`Car rejected the command (status ${data?.deviceStatus})`);
         }
@@ -304,7 +306,7 @@
         // Hand control of the inputs back to polling
         scheduleDirty = false;
         renderSchedule(data ?? {});
-        setTimeout(loadSchedule, 200);
+        setTimeout(loadSchedule, 500);
       } catch (err) {
         scheduleStatusEl.textContent = `Failed: ${err.message}`;
         scheduleStatusEl.className = "schedule-status";
