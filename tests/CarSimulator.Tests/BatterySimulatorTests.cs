@@ -2,6 +2,7 @@ using CarSimulator;
 
 namespace CarSimulator.Tests;
 
+// Tests battery charging and drain behavior.
 public class BatterySimulatorTests
 {
     private static readonly DateTimeOffset T0 =

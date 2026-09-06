@@ -1,5 +1,6 @@
 namespace CarSimulator;
 
+// Converts a local charging time into the next UTC run.
 public static class ScheduleCalculator
 {
     public static DateTimeOffset? ComputeNextRun(

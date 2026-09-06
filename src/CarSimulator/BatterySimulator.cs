@@ -1,5 +1,6 @@
 namespace CarSimulator;
 
+// Simulates battery level changes while driving or charging.
 public class BatterySimulator
 {
     private readonly double _chargeRatePerMinute;

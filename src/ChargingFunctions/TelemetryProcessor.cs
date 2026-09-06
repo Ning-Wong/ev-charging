@@ -7,6 +7,7 @@ using Azure.Messaging.EventHubs;
 
 namespace ChargingFunctions;
 
+// Models telemetry received from the car.
 public record CarTelemetry(
     string DeviceId,
     int BatteryLevel,
@@ -21,11 +22,11 @@ public class CarStateEntity : ITableEntity
     public bool IsCharging { get; set; }
     public DateTimeOffset LastUpdated { get; set; }
 
-    // Required by ITableEntity, managed by the storage service
     public DateTimeOffset? Timestamp { get; set; }
     public ETag ETag { get; set; }
 }
 
+// Processes IoT Hub telemetry events.
 public class TelemetryProcessor
 {
     private readonly TableClient _table;
@@ -50,7 +51,6 @@ public class TelemetryProcessor
             var raw = e.EventBody.ToString();
             _log.LogInformation("Received: {Raw}", raw);
 
-            // Device identity comes from IoT Hub, not from the payload.
             if (!e.SystemProperties.TryGetValue(
                     "iothub-connection-device-id", out var deviceIdObj)
                 || deviceIdObj is not string deviceId

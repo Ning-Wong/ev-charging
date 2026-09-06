@@ -4,6 +4,7 @@ using CarSimulator;
 using Microsoft.Azure.Devices.Client;
 using Microsoft.Azure.Devices.Shared;
 
+// Connect to IoT Hub as the simulated car.
 var connectionString =
     Environment.GetEnvironmentVariable("IOTHUB_DEVICE_CONNECTION_STRING")
     ?? throw new InvalidOperationException(
@@ -29,6 +30,7 @@ bool? lastReportedCharging = null;
 
 using var stateChanged = new SemaphoreSlim(0);
 
+// Log the next scheduled charging run.
 void LogNextRun()
 {
     Console.WriteLine(nextScheduledRun is null
@@ -58,6 +60,7 @@ async Task ReportStateAsync()
     lastReportedCharging = battery.IsCharging;
 }
 
+// Apply schedule changes received through the device twin.
 async Task ApplyDesiredAsync(TwinCollection desired)
 {
     if (!desired.Contains("chargingSchedule")) return;
@@ -119,6 +122,7 @@ async Task SendTelemetryAsync()
     Console.WriteLine($"Sent: {payload}");
 }
 
+// Handle direct charging commands from the cloud.
 await client.SetMethodHandlerAsync("startCharging", (request, _) =>
 {
     if (!battery.TryStartCharging(DateTimeOffset.UtcNow))
@@ -145,6 +149,7 @@ await client.SetMethodHandlerAsync("stopCharging", (request, _) =>
 
 var twin = await client.GetTwinAsync();
 
+// Restore the last known car state from the device twin.
 var restoredLevel = 50.0;
 var restoredCharging = false;
 
@@ -195,6 +200,7 @@ if (restoredRuns is { } runs && remainingRuns is not null && runs < remainingRun
 await client.SetDesiredPropertyUpdateCallbackAsync(
     async (desired, _) => await ApplyDesiredAsync(desired), null);
 
+// Run the simulator loop and publish telemetry.
 Console.WriteLine(
     $"Simulator started. Sending telemetry every {interval.TotalSeconds}s. Press Ctrl+C to stop.");
 

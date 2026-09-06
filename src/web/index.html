@@ -84,6 +84,7 @@
   </style>
 </head>
 <body>
+  <!-- Car status and charging controls. -->
   <h1>my-car</h1>
   <div class="level" id="level">--</div>
   <div class="bar"><div class="bar-fill" id="barFill"></div></div>
@@ -111,6 +112,7 @@
   </div>
 
   <script>
+    // API settings and page state.
     const API = location.hostname === "localhost" || location.hostname === "127.0.0.1"
       ? "http://localhost:7071/api"
       : "https://ev-charging-fn.azurewebsites.net/api";
@@ -139,6 +141,7 @@
 
     let scheduleDirty = false;
 
+    // Parse API responses without assuming a JSON body.
     async function readJsonSafely(res) {
       const text = await res.text();
       if (!text) return null;
@@ -154,6 +157,7 @@
       feedbackEl.textContent = message;
     }
 
+    // Render the latest car state.
     function render(data) {
       levelEl.textContent = `${data.batteryLevel}%`;
 
@@ -201,6 +205,7 @@
       }
     }
 
+    // Send a start or stop command to the car.
     async function sendCommand(action) {
       startBtn.disabled = true;
       stopBtn.disabled = true;
@@ -230,6 +235,7 @@
       }
     }
 
+    // Render and persist the charging schedule.
     function describeSchedule(data) {
       // runsLeftOnCar is the countdown the car is actually working from
       const runs = data.runsLeftOnCar ?? data.remainingRuns;

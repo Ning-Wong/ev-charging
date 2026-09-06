@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 
 namespace ChargingFunctions;
 
+// Models charging schedule requests and responses.
 public record ChargingSchedule(
     [property: JsonPropertyName("startTime")] string StartTime,
     [property: JsonPropertyName("timeZone")] string TimeZone,
@@ -21,6 +22,7 @@ public record ScheduleResponse(
     [property: JsonPropertyName("runsLeftOnCar")] int? RunsLeftOnCar,
     [property: JsonPropertyName("acknowledgedByCar")] bool AcknowledgedByCar);
 
+// HTTP API for reading and updating charging schedules.
 public class ScheduleApi
 {
     private const string TwinKey = "chargingSchedule";

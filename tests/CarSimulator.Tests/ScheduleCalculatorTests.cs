@@ -2,6 +2,7 @@ using CarSimulator;
 
 namespace CarSimulator.Tests;
 
+// Tests schedule calculation across time zones and DST.
 public class ScheduleCalculatorTests
 {
     private const string Auckland = "Pacific/Auckland";

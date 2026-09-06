@@ -8,12 +8,14 @@ using Microsoft.Extensions.Logging;
 
 namespace ChargingFunctions;
 
+// Represents the state returned to the web client.
 public record CarStateResponse(
     [property: JsonPropertyName("deviceId")] string DeviceId,
     [property: JsonPropertyName("batteryLevel")] int BatteryLevel,
     [property: JsonPropertyName("isCharging")] bool IsCharging,
     [property: JsonPropertyName("lastUpdated")] DateTimeOffset LastUpdated);
 
+// HTTP API for reading the latest car state.
 public class CarStateApi
 {
     private readonly TableClient _table;

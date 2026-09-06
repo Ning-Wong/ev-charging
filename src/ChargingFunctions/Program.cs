@@ -8,6 +8,7 @@ using OpenTelemetry;
 using Azure.Data.Tables;
 using Microsoft.Azure.Devices;
 
+// Register the Azure clients that the functions depend on
 var builder = FunctionsApplication.CreateBuilder(args);
 
 builder.ConfigureFunctionsWebApplication();

@@ -8,12 +8,14 @@ using Microsoft.Azure.Devices.Common.Exceptions;
 
 namespace ChargingFunctions;
 
+// Models the result of a charging command.
 public record CommandResponse(
     [property: JsonPropertyName("deviceId")] string DeviceId,
     [property: JsonPropertyName("command")] string Command,
     [property: JsonPropertyName("accepted")] bool Accepted,
     [property: JsonPropertyName("deviceStatus")] int DeviceStatus);
 
+// HTTP API for direct charging commands.
 public class ChargingCommandApi
 {
     private readonly ServiceClient _serviceClient;
