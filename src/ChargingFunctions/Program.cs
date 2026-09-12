@@ -7,6 +7,7 @@ using Microsoft.Extensions.Hosting;
 using OpenTelemetry;
 using Azure.Data.Tables;
 using Microsoft.Azure.Devices;
+using ChargingFunctions.Auth;
 
 // Register the Azure clients that the functions depend on
 var builder = FunctionsApplication.CreateBuilder(args);
@@ -38,6 +39,13 @@ builder.Services.AddSingleton(_ =>
     var conn = Environment.GetEnvironmentVariable("IoTHubServiceConnectionString")
         ?? throw new InvalidOperationException("IoTHubServiceConnectionString is not set");
     return RegistryManager.CreateFromConnectionString(conn);
+});
+
+builder.Services.AddSingleton(_ =>
+{
+    var secret = Environment.GetEnvironmentVariable("JwtSigningKey")
+        ?? throw new InvalidOperationException("JwtSigningKey is not set");
+    return new TokenService(secret);
 });
 
 builder.Build().Run();
