@@ -32,12 +32,12 @@ public class TelemetryProcessor
     private readonly TableClient _table;
     private readonly ILogger<TelemetryProcessor> _log;
 
-    public TelemetryProcessor(TableClient table, ILogger<TelemetryProcessor> log)
+    public TelemetryProcessor(Tables tables, ILogger<TelemetryProcessor> log)
     {
-        _table = table;
+        _table = tables.CarState;
         _log = log;
     }
-
+    
     [Function(nameof(TelemetryProcessor))]
     public async Task Run(
         [EventHubTrigger(

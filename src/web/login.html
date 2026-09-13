@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="card">
+    <img class="logo" src="compac-logo.png" alt="Compac">
+
+    <h1 id="title">Sign in</h1>
+
+    <label class="field"><input id="username" placeholder="Username" autocomplete="username"></label>
+    <label class="field"><input id="password" type="password" placeholder="Password" autocomplete="current-password"></label>
+
+    <div class="row">
+      <button class="primary" id="submit">Sign in</button>
+      <button class="link" id="toggle">Create an account</button>
+    </div>
+
+    <div class="note" id="note"></div>
+  </div>
+
+  <script>
+    const API = location.hostname === "localhost" || location.hostname === "127.0.0.1"
+      ? "http://localhost:7071/api"
+      : "https://ev-charging-fn.azurewebsites.net/api";
+
+    const $ = id => document.getElementById(id);
+    let registering = false;
+
+    function say(text, kind = "") {
+      $("note").textContent = text;
+      $("note").className = "note " + kind;
+    }
+
+    $("toggle").onclick = () => {
+      registering = !registering;
+      $("title").textContent = registering ? "Create an account" : "Sign in";
+      $("submit").textContent = registering ? "Create account" : "Sign in";
+      $("toggle").textContent = registering ? "I already have an account" : "Create an account";
+      say("");
+    };
+
+    async function post(path, body) {
+      const res = await fetch(API + path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : null;
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+      return data;
+    }
+
+    $("submit").onclick = async () => {
+      const username = $("username").value.trim();
+      const password = $("password").value;
+
+      if (!username || !password) return say("Enter a username and password.", "bad");
+
+      $("submit").disabled = true;
+      say(registering ? "Creating account..." : "Signing in...");
+
+      try {
+        if (registering) await post("/auth/register", { username, password });
+
+        const { token, username: name } = await post("/auth/login", { username, password });
+        localStorage.setItem("token", token);
+        localStorage.setItem("username", name);
+        location.href = "index.html";
+      } catch (err) {
+        say(err.message, "bad");
+      } finally {
+        $("submit").disabled = false;
+      }
+    };
+
+    $("password").onkeydown = e => { if (e.key === "Enter") $("submit").click(); };
+  </script>
+</body>
+</html>

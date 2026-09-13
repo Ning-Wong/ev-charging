@@ -5,6 +5,7 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Azure.Devices.Common.Exceptions;
+using ChargingFunctions.Auth;
 
 namespace ChargingFunctions;
 
@@ -19,11 +20,13 @@ public record CommandResponse(
 public class ChargingCommandApi
 {
     private readonly ServiceClient _serviceClient;
+    private readonly RequestAuth _auth;
     private readonly ILogger<ChargingCommandApi> _log;
 
-    public ChargingCommandApi(ServiceClient serviceClient, ILogger<ChargingCommandApi> log)
+    public ChargingCommandApi(ServiceClient serviceClient, RequestAuth auth, ILogger<ChargingCommandApi> log)
     {
         _serviceClient = serviceClient;
+        _auth = auth;
         _log = log;
     }
 
@@ -44,6 +47,9 @@ public class ChargingCommandApi
     private async Task<HttpResponseData> InvokeAsync(
         HttpRequestData req, string deviceId, string methodName)
     {
+        var authResult = await _auth.RequireOwnerAsync(req, deviceId);
+        if (!authResult.Ok) return authResult.Failure!;
+        
         var method = new CloudToDeviceMethod(methodName)
         {
             ResponseTimeout = TimeSpan.FromSeconds(30)

@@ -6,6 +6,7 @@ using Microsoft.Azure.Devices.Shared;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Logging;
+using ChargingFunctions.Auth;
 
 namespace ChargingFunctions;
 
@@ -29,14 +30,16 @@ public class ScheduleApi
     private const int MaxRuns = 999999;
 
     private readonly RegistryManager _registry;
+    private readonly RequestAuth _auth;
     private readonly ILogger<ScheduleApi> _log;
 
     private static readonly JsonSerializerOptions JsonOptions =
         new() { PropertyNameCaseInsensitive = true };
 
-    public ScheduleApi(RegistryManager registry, ILogger<ScheduleApi> log)
+    public ScheduleApi(RegistryManager registry, RequestAuth auth, ILogger<ScheduleApi> log)
     {
         _registry = registry;
+        _auth = auth;
         _log = log;
     }
 
@@ -46,6 +49,9 @@ public class ScheduleApi
         HttpRequestData req,
         string deviceId)
     {
+        var authResult = await _auth.RequireOwnerAsync(req, deviceId);
+        if (!authResult.Ok) return authResult.Failure!;
+
         var twin = await _registry.GetTwinAsync(deviceId);
 
         var desired = ReadSchedule(twin.Properties.Desired);
@@ -73,6 +79,9 @@ public class ScheduleApi
         HttpRequestData req,
         string deviceId)
     {
+        var authResult = await _auth.RequireOwnerAsync(req, deviceId);
+        if (!authResult.Ok) return authResult.Failure!;
+        
         var body = await req.ReadAsStringAsync();
         ChargingSchedule? schedule = null;
 
