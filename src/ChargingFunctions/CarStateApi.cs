@@ -5,6 +5,7 @@ using Azure.Data.Tables;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Logging;
+using ChargingFunctions.Auth;
 
 namespace ChargingFunctions;
 
@@ -19,14 +20,16 @@ public record CarStateResponse(
 public class CarStateApi
 {
     private readonly TableClient _table;
+    private readonly RequestAuth _auth;
     private readonly ILogger<CarStateApi> _log;
 
-    public CarStateApi(TableClient table, ILogger<CarStateApi> log)
+    public CarStateApi(Tables tables, RequestAuth auth, ILogger<CarStateApi> log)
     {
-        _table = table;
+        _table = tables.CarState;
+        _auth = auth;
         _log = log;
     }
-
+    
     [Function(nameof(GetCarState))]
     public async Task<HttpResponseData> GetCarState(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "cars/{deviceId}")]
@@ -35,6 +38,10 @@ public class CarStateApi
     {
         try
         {
+
+            var authResult = await _auth.RequireOwnerAsync(req, deviceId);
+            if (!authResult.Ok) return authResult.Failure!;
+            
             var entity = await _table.GetEntityAsync<CarStateEntity>("car", deviceId);
 
             var response = req.CreateResponse(HttpStatusCode.OK);

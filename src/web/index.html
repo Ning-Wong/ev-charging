@@ -5,110 +5,196 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>My Car</title>
   <style>
-    body {
-      font-family: system-ui, -apple-system, sans-serif;
-      max-width: 480px;
-      margin: 4rem auto;
-      padding: 0 1rem;
-      color: #1a1a1a;
+    :root {
+      --ink: #252d38;
+      --red: #ee1c25;
+      --muted: #6b7280;
+      --line: #e8eaed;
+      --bg: #f5f6f8;
+      --green: #16a34a;
+      --blue: #2563eb;
+      --danger: #dc2626;
     }
-    h1 { font-size: 1.25rem; font-weight: 600; }
-    .level { font-size: 3.5rem; font-weight: 600; margin: 1rem 0 0.5rem; }
+
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 3rem 1rem;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.5;
+    }
+    .card {
+      max-width: 480px;
+      margin: 0 auto;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 2rem;
+    }
+    .logo { height: 48px; display: block; margin-bottom: 2rem; }
+
+    .owner { font-size: 1.35rem; font-weight: 600; }
+    .device {
+      font-size: 0.9rem;
+      color: var(--muted);
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      letter-spacing: 0.02em;
+    }
+
+    .level {
+      font-size: 3rem;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+      margin: 1.5rem 0 0.6rem;
+    }
     .bar {
-      height: 12px;
-      background: #eee;
-      border-radius: 6px;
+      height: 10px;
+      background: var(--line);
+      border-radius: 5px;
       overflow: hidden;
-      margin-bottom: 0.75rem;
     }
     .bar-fill {
       height: 100%;
       width: 0%;
-      background: #4a9d5f;
-      border-radius: 6px;
+      background: var(--green);
+      border-radius: 5px;
       transition: width 0.6s ease, background-color 0.3s ease;
     }
-    .bar-fill.low { background: #c0392b; }
-    .bar-fill.charging { background: #2d7dd2; }
-    .status { color: #666; font-size: 0.9rem; }
-    .status.charging { color: #2d7dd2; font-weight: 600; }
-    .error { color: #c0392b; }
-    .updated { color: #999; font-size: 0.8rem; margin-top: 2rem; }
+    .bar-fill.low { background: var(--danger); }
+    .bar-fill.charging { background: var(--blue); }
+
+    .status { color: var(--muted); font-size: 0.9rem; margin-top: 0.7rem; }
+    .status.charging { color: var(--blue); font-weight: 600; }
+    .status.error { color: var(--danger); }
+    .updated { color: #9aa1ab; font-size: 0.78rem; margin-top: 0.25rem; }
+
     .actions { margin-top: 1.5rem; display: flex; gap: 0.5rem; }
-    button {
+    button, input, select {
       font: inherit;
-      padding: 0.5rem 1rem;
-      cursor: pointer;
-      border: 1px solid #ccc;
-      border-radius: 6px;
+      padding: 0.55rem 0.9rem;
+      border: 1px solid var(--line);
+      border-radius: 8px;
       background: #fff;
+      color: var(--ink);
     }
-    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button { cursor: pointer; }
+    button:hover:not(:disabled) { border-color: #c8ccd2; }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    button.primary { background: var(--ink); border-color: var(--ink); color: #fff; }
+    button.primary:hover:not(:disabled) { background: #363f4d; }
+    input:focus, select:focus {
+      outline: 2px solid var(--red);
+      outline-offset: -1px;
+      border-color: transparent;
+    }
+
     .feedback {
-      margin-top: 0.75rem;
-      font-size: 0.85rem;
-      color: #666;
+      margin-top: 0.7rem;
+      font-size: 0.82rem;
+      color: var(--muted);
       min-height: 1.2em;
     }
-    .schedule {
-      margin-top: 2.5rem;
+
+    .section {
+      margin-top: 2rem;
       padding-top: 1.5rem;
-      border-top: 1px solid #eee;
+      border-top: 1px solid var(--line);
     }
-    .schedule-label {
-      font-size: 0.9rem;
+    .section-label {
+      font-size: 0.78rem;
       font-weight: 600;
-      margin-bottom: 0.6rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-bottom: 0.8rem;
     }
-    .schedule-row {
-      display: flex;
-      gap: 0.5rem;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-    input[type="time"], select {
-      font: inherit;
-      padding: 0.45rem 0.6rem;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      background: #fff;
-    }
+    .schedule-row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
     .schedule-status {
-      margin-top: 0.6rem;
-      font-size: 0.85rem;
-      color: #666;
+      margin-top: 0.7rem;
+      font-size: 0.82rem;
+      color: var(--muted);
       min-height: 1.2em;
     }
-    .schedule-status.pending { color: #b8860b; }
-    .schedule-status.confirmed { color: #4a9d5f; }
+    .schedule-status.pending { color: #b45309; }
+    .schedule-status.confirmed { color: var(--green); }
+
+    .field { display: block; margin-bottom: 0.7rem; }
+    .field input { width: 100%; }
+    .hint { font-size: 0.8rem; color: var(--muted); margin: -0.2rem 0 0.9rem; }
+
+    .link {
+      background: none;
+      border: none;
+      padding: 0;
+      color: var(--muted);
+      font-size: 0.85rem;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+    .link:hover { color: var(--red); }
+    .foot {
+      margin-top: 2rem;
+      padding-top: 1.2rem;
+      border-top: 1px solid var(--line);
+      text-align: right;
+    }
+
+    [hidden] { display: none !important; }
   </style>
 </head>
 <body>
-  <!-- Car status and charging controls. -->
-  <h1>my-car</h1>
-  <div class="level" id="level">--</div>
-  <div class="bar"><div class="bar-fill" id="barFill"></div></div>
-  <div class="status" id="status">Connecting...</div>
-  <div class="updated" id="updated"></div>
+  <div class="card">
+    <img class="logo" src="compac-logo.png" alt="Compac">
 
-  <div class="actions">
-    <button id="start">Start charging</button>
-    <button id="stop">Stop charging</button>
-  </div>
-  <div class="feedback" id="feedback"></div>
-
-  <div class="schedule">
-    <div class="schedule-label">Charging schedule</div>
-    <div class="schedule-row">
-      <input type="time" id="scheduleTime">
-      <select id="scheduleRepeat">
-        <option value="repeat">Every day</option>
-        <option value="once">Once only</option>
-      </select>
-      <button id="saveSchedule">Save</button>
-      <button id="clearSchedule">Clear</button>
+    <!-- Signed-in owner and the vehicle being viewed. -->
+    <div class="owner" id="owner"></div>
+    <div class="device-row">
+      <span class="device" id="device"></span>
+      <select id="picker" hidden></select>
     </div>
-    <div class="schedule-status" id="scheduleStatus">Loading...</div>
+
+    <!-- Shown when the account has no vehicles yet. -->
+    <div class="section" id="claimView" hidden>
+      <div class="section-label">Add your car</div>
+      <p class="hint">Enter the device ID and claim code from your vehicle documents.</p>
+      <label class="field"><input id="claimId" placeholder="Device ID"></label>
+      <label class="field"><input id="claimCode" placeholder="Claim code"></label>
+      <button class="primary" id="claimBtn">Add car</button>
+      <div class="feedback" id="claimFeedback"></div>
+    </div>
+
+    <!-- Car status and charging controls. -->
+    <div id="carView" hidden>
+      <div class="level" id="level">--</div>
+      <div class="bar"><div class="bar-fill" id="barFill"></div></div>
+      <div class="status" id="status">Connecting...</div>
+      <div class="updated" id="updated"></div>
+
+      <div class="actions">
+        <button id="start">Start charging</button>
+        <button id="stop">Stop charging</button>
+      </div>
+      <div class="feedback" id="feedback"></div>
+
+      <div class="section">
+        <div class="section-label">Charging schedule</div>
+        <div class="schedule-row">
+          <input type="time" id="scheduleTime">
+          <select id="scheduleRepeat">
+            <option value="repeat">Every day</option>
+            <option value="once">Once only</option>
+          </select>
+          <button id="saveSchedule">Save</button>
+          <button id="clearSchedule">Clear</button>
+        </div>
+        <div class="schedule-status" id="scheduleStatus">Loading...</div>
+      </div>
+    </div>
+
+    <div class="foot"><button class="link" id="signout">Sign out</button></div>
   </div>
 
   <script>
@@ -116,11 +202,19 @@
     const API = location.hostname === "localhost" || location.hostname === "127.0.0.1"
       ? "http://localhost:7071/api"
       : "https://ev-charging-fn.azurewebsites.net/api";
-    const DEVICE_ID = "my-car";
     const POLL_INTERVAL_MS = 5000;
     const CONFIRM_TIMEOUT_MS = 30000;
     const LOW_BATTERY_THRESHOLD = 20;
     const TIME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+    // Selected by the user at sign-in rather than hard-coded
+    let deviceId = null;
+
+    const ownerEl = document.getElementById("owner");
+    const deviceEl = document.getElementById("device");
+    const pickerEl = document.getElementById("picker");
+    const claimViewEl = document.getElementById("claimView");
+    const carViewEl = document.getElementById("carView");
 
     const levelEl = document.getElementById("level");
     const barFillEl = document.getElementById("barFill");
@@ -136,10 +230,18 @@
     const clearScheduleBtn = document.getElementById("clearSchedule");
     const scheduleStatusEl = document.getElementById("scheduleStatus");
 
+    const claimIdEl = document.getElementById("claimId");
+    const claimCodeEl = document.getElementById("claimCode");
+    const claimBtn = document.getElementById("claimBtn");
+    const claimFeedbackEl = document.getElementById("claimFeedback");
+
     let pendingCharging = null;
     let pendingSince = 0;
 
     let scheduleDirty = false;
+
+    const token = localStorage.getItem("token");
+    if (!token) location.href = "login.html";
 
     // Parse API responses without assuming a JSON body.
     async function readJsonSafely(res) {
@@ -151,6 +253,33 @@
         return { error: text.slice(0, 200) };
       }
     }
+
+    // Attach the token to every call, and sign out once it stops being accepted.
+    async function api(path, options = {}) {
+      const res = await fetch(`${API}${path}`, {
+        ...options,
+        headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` }
+      });
+
+      if (res.status === 401) {
+        localStorage.clear();
+        location.href = "login.html";
+        throw new Error("Session expired");
+      }
+
+      const data = await readJsonSafely(res);
+      if (!res.ok) {
+        const err = new Error(data?.error || `HTTP ${res.status}`);
+        err.status = res.status;
+        throw err;
+      }
+      return data;
+    }
+
+    document.getElementById("signout").addEventListener("click", () => {
+      localStorage.clear();
+      location.href = "login.html";
+    });
 
     function clearPending(message = "") {
       pendingCharging = null;
@@ -176,13 +305,12 @@
         `Last updated ${new Date(data.lastUpdated).toLocaleTimeString()}`;
 
       startBtn.disabled = data.batteryLevel >= 100;
+      stopBtn.disabled = false;
     }
 
     async function refresh() {
       try {
-        const res = await fetch(`${API}/cars/${DEVICE_ID}`);
-        const data = await readJsonSafely(res);
-        if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+        const data = await api(`/cars/${deviceId}`);
 
         if (typeof data?.batteryLevel !== "number" ||
             typeof data?.isCharging !== "boolean") {
@@ -200,8 +328,21 @@
           }
         }
       } catch (err) {
-        statusEl.textContent = `Error: ${err.message}`;
-        statusEl.className = "status error";
+        // A 404 means the car is claimed but has never reported
+        const waiting = err.status === 404;
+
+        levelEl.textContent = "--";
+        barFillEl.style.width = "0%";
+        barFillEl.className = "bar-fill";
+        updatedEl.textContent = "";
+
+        statusEl.textContent = waiting
+          ? "Waiting for the car to report"
+          : `Error: ${err.message}`;
+        statusEl.className = waiting ? "status" : "status error";
+
+        startBtn.disabled = waiting;
+        stopBtn.disabled = waiting;
       }
     }
 
@@ -212,11 +353,7 @@
       feedbackEl.textContent = "Sending...";
 
       try {
-        const res = await fetch(`${API}/cars/${DEVICE_ID}/charging/${action}`, {
-          method: "POST"
-        });
-        const data = await readJsonSafely(res);
-        if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+        const data = await api(`/cars/${deviceId}/charging/${action}`, { method: "POST" });
 
         if (data?.accepted) {
           pendingCharging = (action === "start");
@@ -275,9 +412,7 @@
 
     async function loadSchedule() {
       try {
-        const res = await fetch(`${API}/cars/${DEVICE_ID}/schedule`);
-        const data = await readJsonSafely(res);
-        if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+        const data = await api(`/cars/${deviceId}/schedule`);
         renderSchedule(data ?? {});
       } catch (err) {
         scheduleStatusEl.textContent = `Error: ${err.message}`;
@@ -301,13 +436,11 @@
           };
 
       try {
-        const res = await fetch(`${API}/cars/${DEVICE_ID}/schedule`, {
+        const data = await api(`/cars/${deviceId}/schedule`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body)
         });
-        const data = await readJsonSafely(res);
-        if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
 
         // Hand control of the inputs back to polling
         scheduleDirty = false;
@@ -319,6 +452,27 @@
       } finally {
         saveScheduleBtn.disabled = false;
         clearScheduleBtn.disabled = false;
+      }
+    }
+
+    // Bind a car to this account using the code that ships with the vehicle.
+    async function claimCar() {
+      claimBtn.disabled = true;
+      claimFeedbackEl.textContent = "Adding...";
+
+      try {
+        await api("/cars/claim", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            deviceId: claimIdEl.value.trim(),
+            claimCode: claimCodeEl.value.trim()
+          })
+        });
+        location.reload();
+      } catch (err) {
+        claimFeedbackEl.textContent = `Failed: ${err.message}`;
+        claimBtn.disabled = false;
       }
     }
 
@@ -338,10 +492,48 @@
     startBtn.addEventListener("click", () => sendCommand("start"));
     stopBtn.addEventListener("click", () => sendCommand("stop"));
 
-    refresh();
-    loadSchedule();
-    setInterval(refresh, POLL_INTERVAL_MS);
-    setInterval(loadSchedule, POLL_INTERVAL_MS);
+    claimBtn.addEventListener("click", claimCar);
+
+    // Switching vehicles reloads both the state and the schedule.
+    function selectDevice(id) {
+      deviceId = id;
+      scheduleDirty = false;
+      clearPending();
+      refresh();
+      loadSchedule();
+    }
+
+    // Load the account's vehicles, then start polling the selected one.
+    (async function start() {
+      ownerEl.textContent = localStorage.getItem("username") ?? "";
+
+      let cars = [];
+      try {
+        cars = await api("/cars") ?? [];
+      } catch {
+        // Falls through to the claim view
+      }
+
+      if (cars.length === 0) {
+        claimViewEl.hidden = false;
+        return;
+      }
+
+      carViewEl.hidden = false;
+
+      if (cars.length > 1) {
+        cars.forEach(id => pickerEl.add(new Option(id, id)));
+        pickerEl.hidden = false;
+        pickerEl.addEventListener("change", () => selectDevice(pickerEl.value));
+      } else {
+        deviceEl.textContent = cars[0];
+      }
+
+      selectDevice(cars[0]);
+
+      setInterval(refresh, POLL_INTERVAL_MS);
+      setInterval(loadSchedule, POLL_INTERVAL_MS);
+    })();
   </script>
 </body>
 </html>

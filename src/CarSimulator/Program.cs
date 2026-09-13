@@ -104,7 +104,7 @@ async Task SendTelemetryAsync()
 {
     var telemetry = new
     {
-        deviceId = "my-car",
+        deviceId = "Model-Y",
         batteryLevel = battery.Level,
         isCharging = battery.IsCharging,
         timestamp = DateTimeOffset.UtcNow
